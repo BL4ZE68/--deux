@@ -179,6 +179,11 @@ https://ioopcordecqgkduxwlr.supabase.co/auth/v1/callback
 Les fichiers `.env` et `.env.local` sont exclus de GitHub. Seul `.env.example`
 est destiné à être versionné.
 
+Si Google redirige correctement mais affiche « Impossible de créer le profil Google »,
+exécute à nouveau `supabase/schema.sql` ou ajoute `SUPABASE_SERVICE_ROLE_KEY` dans
+les variables Vercel. Cette clé doit être la **service role key** du projet Supabase,
+pas la clé anon.
+
 ## 📤 Publication GitHub
 
 ```powershell

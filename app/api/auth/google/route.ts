@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateToken, getSpaceByUserId, getSupabaseClient } from '@/lib/db';
+import { generateToken, getSpaceByUserId } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,10 +26,21 @@ export async function POST(request: NextRequest) {
 
     const googleUser = userData.user;
     const email = String(googleUser.email).toLowerCase();
-    const profileClient = getSupabaseClient();
-    if (!profileClient) {
-      return NextResponse.json({ message: 'La clé serveur Supabase est requise' }, { status: 503 });
-    }
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const profileClient = createClient(
+      url,
+      serviceRoleKey || anonKey,
+      serviceRoleKey
+        ? {
+            auth: { persistSession: false, autoRefreshToken: false },
+          }
+        : {
+            auth: { persistSession: false, autoRefreshToken: false },
+            global: {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            },
+          }
+    );
 
     let profileId = googleUser.id;
     const { data: existingProfile } = await profileClient
@@ -58,7 +69,13 @@ export async function POST(request: NextRequest) {
 
       if (profileError) {
         console.error('Google profile sync error:', profileError);
-        return NextResponse.json({ message: 'Impossible de créer le profil Google' }, { status: 500 });
+        return NextResponse.json(
+          {
+            message:
+              'Impossible de créer le profil Google. Vérifie les policies RLS de profiles ou configure SUPABASE_SERVICE_ROLE_KEY sur Vercel.',
+          },
+          { status: 500 }
+        );
       }
     }
 

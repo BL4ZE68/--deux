@@ -70,5 +70,24 @@ alter table reactions enable row level security;
 alter table notifications enable row level security;
 alter table secret_messages enable row level security;
 
+drop policy if exists "profiles_select_own" on profiles;
+create policy "profiles_select_own"
+  on profiles for select
+  to authenticated
+  using (auth.uid() = id);
+
+drop policy if exists "profiles_insert_own" on profiles;
+create policy "profiles_insert_own"
+  on profiles for insert
+  to authenticated
+  with check (auth.uid() = id);
+
+drop policy if exists "profiles_update_own" on profiles;
+create policy "profiles_update_own"
+  on profiles for update
+  to authenticated
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
 -- Enable memories, reactions and notifications in Supabase Dashboard:
 -- Database > Publications > supabase_realtime.
