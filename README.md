@@ -130,7 +130,83 @@ npm start        # Serveur de production
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+NEXT_PUBLIC_OAUTH_CONSENT_URL=https://deux-1xd5-arielsilue520-gmailcoms-projects.vercel.app/oauth/consent
+NEXT_PUBLIC_SITE_URL=https://deux-1xd5-arielsilue520-gmailcoms-projects.vercel.app
 ```
+
+### Connexion Google
+
+Dans **Supabase → Authentication → Providers → Google**, active Google et utilise l’URL de callback Supabase :
+
+`https://ioopcordecqgkduxwlr.supabase.co/auth/v1/callback`
+
+Dans les URLs de redirection autorisées, ajoute :
+
+`https://deux-1xd5-arielsilue520-gmailcoms-projects.vercel.app/auth/callback`
+
+La page `/auth/callback` échange le code OAuth Supabase, synchronise le profil Google
+dans `profiles`, puis crée la session interne utilisée par les routes privées de l’application.
+
+## 🚀 Déploiement Vercel
+
+1. Importez le dépôt GitHub dans Vercel.
+2. Ajoutez ces variables dans **Project Settings → Environment Variables** :
+
+```env
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_URL
+SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+NEXT_PUBLIC_SITE_URL
+NEXT_PUBLIC_OAUTH_CONSENT_URL
+```
+
+3. Dans Supabase, ajoutez l’URL de production suivante aux **Redirect URLs** :
+
+```text
+https://deux-1xd5-arielsilue520-gmailcoms-projects.vercel.app/auth/callback
+```
+
+4. Dans Google Cloud Console, conservez cette **Authorized redirect URI** :
+
+```text
+https://ioopcordecqgkduxwlr.supabase.co/auth/v1/callback
+```
+
+5. Redéployez après toute modification des variables.
+
+Les fichiers `.env` et `.env.local` sont exclus de GitHub. Seul `.env.example`
+est destiné à être versionné.
+
+## 📤 Publication GitHub
+
+```powershell
+git add .
+git commit -m "Integrate Google OAuth with Supabase"
+git branch -M main
+git remote add origin https://github.com/TON_COMPTE/TON_REPO.git
+git push -u origin main
+```
+
+Le workflow GitHub Actions lance automatiquement `npm ci` puis `npm run build`
+sur les push vers `main` et les pull requests.
+
+### Supabase OAuth Server
+
+La page d’autorisation OAuth est disponible à :
+
+`https://deux-1xd5-arielsilue520-gmailcoms-projects.vercel.app/oauth/consent`
+
+Dans **Supabase → Authentication → OAuth Server**, configure :
+
+- **OAuth 2.1 Server** : activé
+- **Authorization Path** : `/oauth/consent`
+- **Site URL** : `https://deux-1xd5-arielsilue520-gmailcoms-projects.vercel.app`
+
+Le fichier [`supabase/config.toml`](./supabase/config.toml) contient aussi cette configuration
+pour un environnement Supabase local. L’écran lit `authorization_id`, affiche le client et
+les scopes demandés, puis appelle `approveAuthorization` ou `denyAuthorization`.
 
 ### Règles de sécurité
 
