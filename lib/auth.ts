@@ -29,24 +29,16 @@ export async function getAuthenticatedUser(
   const token = extractBearerToken(request);
   if (!token) return null;
 
-  const url = getSupabaseUrl();
-  const anonKey = getAnonKey();
-  if (!url || !anonKey) return null;
+  const client = createSupabaseClientForToken(token);
+  if (!client) return null;
 
-  const authClient = createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await authClient.auth.getUser(token);
-  if (error || !data.user?.email) return null;
+  const { data: { user }, error } = await client.auth.getUser();
+  if (error || !user?.email) return null;
 
-  const profileClient = createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-  const { data: profile } = await profileClient
+  const { data: profile } = await client
     .from('profiles')
     .select('id, email, first_name, avatar_url')
-    .eq('id', data.user.id)
+    .eq('id', user.id)
     .maybeSingle();
 
   if (!profile) return null;

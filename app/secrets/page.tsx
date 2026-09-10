@@ -8,10 +8,11 @@ import Link from 'next/link';
 
 interface SecretMessage {
   id: string;
+  author_id: string;
   title: string;
   content: string;
-  unlocksAt: Date;
-  opened: boolean;
+  opens_at: string;
+  created_at: string;
 }
 
 export default function SecretsPage() {
@@ -19,32 +20,95 @@ export default function SecretsPage() {
   const [loading, setLoading] = useState(true);
   const [secrets, setSecrets] = useState<SecretMessage[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     unlocksAt: new Date().toISOString().split('T')[0],
   });
 
-  useEffect(() => {
+  const loadSecrets = async () => {
     const token = localStorage.getItem('auth_token');
-    if (!token) {
-      router.push('/auth/login');
-      return;
+    if (!token) return;
+
+    try {
+      const res = await fetch('/api/secrets', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSecrets(data.secrets);
+      }
+    } catch (err) {
+      console.error(err);
     }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        router.push('/auth/login');
+        return;
+      }
+
+      try {
+        const meRes = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!meRes.ok) {
+          router.push('/auth/login');
+          return;
+        }
+        const meData = await meRes.json();
+        setUser(meData.user);
+        await loadSecrets();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // Load dummy secrets for now
-    setSecrets([
-      {
-        id: '1',
-        title: 'Ouvre quand tu es triste',
-        content: 'Je suis toujours là pour toi ❤️',
-        unlocksAt: new Date('2025-01-01'),
-        opened: false,
-      },
-    ]);
-    
-    setLoading(false);
+    void init();
   }, [router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem('auth_token');
+    if (!token || !formData.title || !formData.content) return;
+
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/secrets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          content: formData.content,
+          opensAt: formData.unlocksAt,
+        }),
+      });
+
+      if (res.ok) {
+        setShowForm(false);
+        setFormData({
+          title: '',
+          content: '',
+          unlocksAt: new Date().toISOString().split('T')[0],
+        });
+        await loadSecrets();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -53,6 +117,8 @@ export default function SecretsPage() {
       </div>
     );
   }
+
+  const isUnlocked = (dateStr: string) => new Date(dateStr).getTime() <= new Date().getTime();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
@@ -76,15 +142,13 @@ export default function SecretsPage() {
 
         {showForm && (
           <Card className="p-6 mb-8">
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              setShowForm(false);
-            }} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <Input
                 label="Titre"
                 placeholder="Ouvre quand tu es..."
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                required
               />
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -96,6 +160,7 @@ export default function SecretsPage() {
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   rows={4}
+                  required
                 />
               </div>
               <Input
@@ -103,10 +168,11 @@ export default function SecretsPage() {
                 type="date"
                 value={formData.unlocksAt}
                 onChange={(e) => setFormData({ ...formData, unlocksAt: e.target.value })}
+                required
               />
               <div className="flex gap-2">
-                <Button type="submit" className="flex-1">
-                  Créer le message secret
+                <Button type="submit" className="flex-1" disabled={submitting}>
+                  {submitting ? 'Création...' : 'Créer le message secret'}
                 </Button>
                 <Button
                   type="button"
@@ -130,38 +196,48 @@ export default function SecretsPage() {
               </p>
             </Card>
           ) : (
-            secrets.map((secret) => (
-              <Card key={secret.id} className="p-6">
-                <div className="flex gap-4">
-                  <div className="text-pink-600">
-                    {secret.opened ? (
-                      <Lock className="w-5 h-5 opacity-30" />
-                    ) : (
-                      <Lock className="w-5 h-5" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
-                      {secret.title}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-4">
-                      <Calendar className="w-4 h-4" />
-                      Accessible le {new Date(secret.unlocksAt).toLocaleDateString('fr-FR')}
+            secrets.map((secret) => {
+              const unlocked = isUnlocked(secret.opens_at);
+              const isAuthor = secret.author_id === user?.id;
+
+              return (
+                <Card key={secret.id} className="p-6">
+                  <div className="flex gap-4">
+                    <div className="text-pink-600">
+                      {unlocked ? (
+                        <Heart className="w-5 h-5" />
+                      ) : (
+                        <Lock className="w-5 h-5" />
+                      )}
                     </div>
-                    {secret.opened && (
-                      <p className="text-slate-700 dark:text-slate-300 mb-4">
-                        {secret.content}
-                      </p>
-                    )}
-                    {!secret.opened && (
-                      <Button variant="ghost">
-                        🔒 Message verrouillé
-                      </Button>
-                    )}
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
+                        {secret.title}
+                      </h3>
+                      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-4">
+                        <Calendar className="w-4 h-4" />
+                        Accessible le {new Date(secret.opens_at).toLocaleDateString('fr-FR')}
+                      </div>
+
+                      {unlocked || isAuthor ? (
+                        <p className="text-slate-700 dark:text-slate-300 mb-4 italic">
+                          {secret.content}
+                          {isAuthor && !unlocked && (
+                            <span className="block text-xs text-pink-500 mt-1 not-italic">
+                              (Visible seulement par vous car vous en êtes l'auteur)
+                            </span>
+                          )}
+                        </p>
+                      ) : (
+                        <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg text-center text-slate-500 italic text-sm">
+                          Revenez le {new Date(secret.opens_at).toLocaleDateString('fr-FR')} pour découvrir ce message.
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))
+                </Card>
+              );
+            })
           )}
         </div>
       </div>

@@ -4,7 +4,10 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { createClient } from '@supabase/supabase-js';
 
-export function useRealtimeSync(onMemoryChange?: () => void) {
+export function useRealtimeSync(
+  onMemoryChange?: () => void,
+  onReactionChange?: () => void
+) {
   const { space } = useAuthStore();
 
   useEffect(() => {
@@ -24,10 +27,15 @@ export function useRealtimeSync(onMemoryChange?: () => void) {
         { event: '*', schema: 'public', table: 'memories', filter: `space_id=eq.${space.id}` },
         () => onMemoryChange?.()
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'reactions' },
+        () => onReactionChange?.()
+      )
       .subscribe();
 
     return () => {
       void client.removeChannel(channel);
     };
-  }, [space, onMemoryChange]);
+  }, [space, onMemoryChange, onReactionChange]);
 }

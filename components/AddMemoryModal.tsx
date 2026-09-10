@@ -16,6 +16,7 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
   const [selectedType, setSelectedType] = useState('');
   const [content, setContent] = useState('');
   const [file, setFile] = useState<File | undefined>();
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const types = [
@@ -31,6 +32,17 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
     setStep('content');
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    setFile(selectedFile);
+    if (selectedFile) {
+      const url = URL.createObjectURL(selectedFile);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!content.trim() && !file) return;
     setSubmitting(true);
@@ -40,6 +52,7 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
       setSelectedType('');
       setContent('');
       setFile(undefined);
+      setPreviewUrl(null);
       onClose();
     } finally {
       setSubmitting(false);
@@ -107,12 +120,36 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
                   )}
 
                   {(selectedType === 'photo' || selectedType === 'video' || selectedType === 'audio') && (
-                    <input
-                      type="file"
-                      accept={selectedType === 'photo' ? 'image/*' : selectedType === 'video' ? 'video/*' : 'audio/*'}
-                      onChange={(event) => setFile(event.target.files?.[0])}
-                      className="w-full rounded-lg border-2 border-dashed border-slate-300 p-4 text-sm dark:border-slate-700"
-                    />
+                    <div className="space-y-4">
+                      {previewUrl && (
+                        <div className="relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 max-h-48 flex items-center justify-center">
+                          {selectedType === 'photo' && (
+                            <img src={previewUrl} alt="Preview" className="max-h-48 object-contain" />
+                          )}
+                          {selectedType === 'video' && (
+                            <video src={previewUrl} className="max-h-48" controls />
+                          )}
+                          {selectedType === 'audio' && (
+                            <audio src={previewUrl} controls className="w-full p-4" />
+                          )}
+                          <button
+                            onClick={() => {
+                              setFile(undefined);
+                              setPreviewUrl(null);
+                            }}
+                            className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 text-white rounded-full"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept={selectedType === 'photo' ? 'image/*' : selectedType === 'video' ? 'video/*' : 'audio/*'}
+                        onChange={handleFileChange}
+                        className="w-full rounded-lg border-2 border-dashed border-slate-300 p-4 text-sm dark:border-slate-700"
+                      />
+                    </div>
                   )}
 
                   {selectedType === 'mood' && (

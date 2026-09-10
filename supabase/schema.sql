@@ -48,12 +48,37 @@ create table if not exists notifications (
 create table if not exists secret_messages (
   id uuid primary key default gen_random_uuid(),
   space_id uuid references spaces(id) on delete cascade not null,
+  author_id uuid references profiles(id) on delete cascade not null,
   title text not null,
   content text not null,
   media_url text,
   opens_at timestamptz not null,
   created_at timestamptz default now()
 );
+
+create table if not exists streaks (
+  id uuid primary key default gen_random_uuid(),
+  space_id uuid references spaces(id) on delete cascade not null unique,
+  current_streak int default 0,
+  max_streak int default 0,
+  last_memory_at timestamptz,
+  created_at timestamptz default now()
+);
+
+create index if not exists streaks_space_idx on streaks(space_id);
+alter table streaks enable row level security;
+
+drop policy if exists "streaks_member" on streaks;
+create policy "streaks_member"
+  on streaks for select
+  to authenticated
+  using (
+    exists (
+      select 1 from spaces
+      where spaces.id = streaks.space_id
+        and (spaces.user1_id = auth.uid() or spaces.user2_id = auth.uid())
+    )
+  );
 
 insert into storage.buckets (id, name, public)
 values ('memories', 'memories', false)

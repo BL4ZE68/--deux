@@ -18,6 +18,25 @@ export interface SharedSpace {
   updatedAt: Date;
 }
 
+export interface Streak {
+  id: string;
+  space_id: string;
+  current_streak: number;
+  max_streak: number;
+  last_memory_at: Date | null;
+}
+
+export interface SecretMessage {
+  id: string;
+  space_id: string;
+  author_id: string;
+  title: string;
+  content: string;
+  media_url?: string;
+  opens_at: Date;
+  created_at: Date;
+}
+
 export interface Memory {
   id: string;
   space_id: string;
@@ -99,6 +118,29 @@ function normalizeReaction(row: Record<string, any>): Reaction {
     user_id: String(row.user_id),
     emoji: String(row.emoji),
     createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+  };
+}
+
+function normalizeStreak(row: Record<string, any>): Streak {
+  return {
+    id: String(row.id),
+    space_id: String(row.space_id),
+    current_streak: Number(row.current_streak || 0),
+    max_streak: Number(row.max_streak || 0),
+    last_memory_at: row.last_memory_at ? new Date(row.last_memory_at) : null,
+  };
+}
+
+function normalizeSecret(row: Record<string, any>): SecretMessage {
+  return {
+    id: String(row.id),
+    space_id: String(row.space_id),
+    author_id: String(row.author_id),
+    title: String(row.title),
+    content: String(row.content),
+    media_url: row.media_url ?? undefined,
+    opens_at: new Date(row.opens_at),
+    created_at: new Date(row.created_at),
   };
 }
 
@@ -488,6 +530,114 @@ export async function createNotification(
     message,
     reference_id: referenceId ?? null,
   });
+}
+
+// STREAKS
+export async function getStreak(spaceId: string): Promise<Streak | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  const { data, error } = await client
+    .from('streaks')
+    .select('*')
+    .eq('space_id', spaceId)
+    .maybeSingle();
+
+  if (error || !data) {
+    // Initialiser le streak si inexistant
+    const newStreak = {
+      id: crypto.randomUUID(),
+      space_id: spaceId,
+      current_streak: 0,
+      max_streak: 0,
+      last_memory_at: null,
+    };
+    await client.from('streaks').insert(newStreak);
+    return newStreak;
+  }
+  return normalizeStreak(data);
+}
+
+export async function updateStreak(spaceId: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  const streak = await getStreak(spaceId);
+  if (!streak) return;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lastDate = streak.last_memory_at
+    ? new Date(streak.last_memory_at.getFullYear(), streak.last_memory_at.getMonth(), streak.last_memory_at.getDate())
+    : null;
+
+  let newCurrent = streak.current_streak;
+
+  if (!lastDate) {
+    newCurrent = 1;
+  } else {
+    const diffTime = today.getTime() - lastDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) {
+      newCurrent += 1;
+    } else if (diffDays > 1) {
+      newCurrent = 1;
+    }
+    // Si diffDays === 0, on a déjà posté aujourd'hui, on ne change rien
+  }
+
+  const newMax = Math.max(streak.max_streak, newCurrent);
+
+  await client
+    .from('streaks')
+    .update({
+      current_streak: newCurrent,
+      max_streak: newMax,
+      last_memory_at: now.toISOString(),
+    })
+    .eq('space_id', spaceId);
+}
+
+// SECRETS
+export async function getSecrets(spaceId: string): Promise<SecretMessage[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  const { data, error } = await client
+    .from('secret_messages')
+    .select('*')
+    .eq('space_id', spaceId)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+  return data.map(normalizeSecret);
+}
+
+export async function createSecret(
+  secret: Omit<SecretMessage, 'id' | 'created_at'>
+): Promise<SecretMessage | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  const id = crypto.randomUUID();
+  const { data, error } = await client
+    .from('secret_messages')
+    .insert({
+      id,
+      space_id: secret.space_id,
+      author_id: secret.author_id,
+      title: secret.title,
+      content: secret.content,
+      media_url: secret.media_url ?? null,
+      opens_at: secret.opens_at.toISOString(),
+      created_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error || !data) return null;
+  return normalizeSecret(data);
 }
 
 export { db };

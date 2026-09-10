@@ -17,12 +17,19 @@ interface Space {
   id: string;
   user1_id: string;
   user2_id?: string;
+  created_at?: string;
+}
+
+interface StreakData {
+  current_streak: number;
+  max_streak: number;
 }
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [space, setSpace] = useState<Space | null>(null);
+  const [streak, setStreak] = useState<StreakData | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -46,6 +53,15 @@ export default function DashboardPage() {
         const data = await response.json();
         setUser(data.user);
         setSpace(data.space);
+
+        // Fetch Streak
+        const streakRes = await fetch('/api/streak', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (streakRes.ok) {
+          const streakData = await streakRes.json();
+          setStreak(streakData.streak);
+        }
       } catch (error) {
         console.error('Error:', error);
         router.push('/auth/login');
@@ -73,6 +89,10 @@ export default function DashboardPage() {
   if (!user) return null;
   const hasPartner = Boolean(space?.user2_id);
 
+  const daysTogether = space?.created_at
+    ? Math.floor((new Date().getTime() - new Date(space.created_at).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+
   const navigation = (
     <nav className="p-6 space-y-2">
       <Link href="/dashboard">
@@ -85,6 +105,12 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">
           <MessageCircle className="w-5 h-5" />
           Journal
+        </div>
+      </Link>
+      <Link href="/secrets">
+        <div className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">
+          <Lock className="w-5 h-5" />
+          Secrets
         </div>
       </Link>
       <Link href="/memories">
@@ -145,16 +171,18 @@ export default function DashboardPage() {
 
             {hasPartner && (
               <div className="grid md:grid-cols-3 gap-4 mb-8">
-                {[
-                  ['127', 'jours ensemble'],
-                  ['🔥 14', 'jours de streak'],
-                  ['284', 'souvenirs'],
-                ].map(([value, label]) => (
-                  <Card key={label} className="p-6 text-center">
-                    <div className="text-3xl font-bold text-pink-600 mb-2">{value}</div>
-                    <div className="text-slate-600 dark:text-slate-400">{label}</div>
-                  </Card>
-                ))}
+                <Card className="p-6 text-center">
+                  <div className="text-3xl font-bold text-pink-600 mb-2">{daysTogether}</div>
+                  <div className="text-slate-600 dark:text-slate-400">jours ensemble</div>
+                </Card>
+                <Card className="p-6 text-center">
+                  <div className="text-3xl font-bold text-pink-600 mb-2">🔥 {streak?.current_streak || 0}</div>
+                  <div className="text-slate-600 dark:text-slate-400">jours de streak</div>
+                </Card>
+                <Card className="p-6 text-center">
+                  <div className="text-3xl font-bold text-pink-600 mb-2">🏆 {streak?.max_streak || 0}</div>
+                  <div className="text-slate-600 dark:text-slate-400">meilleur score</div>
+                </Card>
               </div>
             )}
 

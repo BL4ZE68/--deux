@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth';
-import { getSpaceByUserId, createMemory, createNotification, getMemories, getSupabaseClient, type Memory } from '@/lib/db';
+import { getSpaceByUserId, createMemory, createNotification, getMemories, getSupabaseClient, updateStreak, type Memory } from '@/lib/db';
 import crypto from 'crypto';
 
 export async function GET(request: NextRequest) {
@@ -106,6 +106,9 @@ export async function POST(request: NextRequest) {
       media_url: mediaUrl,
       mood: readValue('mood') || undefined,
     });
+
+    // Mettre à jour le streak
+    await updateStreak(space.id);
 
     const partnerId = space.user1_id === user.id ? space.user2_id : space.user1_id;
     if (partnerId) {
