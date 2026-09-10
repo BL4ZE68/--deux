@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card } from '@/components/ui';
 import { Heart, AlertCircle, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
 
 function JoinSpaceForm() {
   const router = useRouter();
@@ -63,6 +64,9 @@ function JoinSpaceForm() {
         <button onClick={() => router.push('/auth/create-space')} className="mt-6 w-full text-center text-sm text-pink-600">
           Créer un espace
         </button>
+        <Link href="/auth/login" className="mt-3 block w-full text-center text-sm text-slate-500 hover:text-pink-600">
+          Se connecter avec un autre compte
+        </Link>
       </Card>
     </main>
   );
