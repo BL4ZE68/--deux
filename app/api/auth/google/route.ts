@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateToken, getSpaceByUserId } from '@/lib/db';
+import { upsertProfile, getSpaceByUserId } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,77 +26,43 @@ export async function POST(request: NextRequest) {
 
     const googleUser = userData.user;
     const email = String(googleUser.email).toLowerCase();
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const profileClient = createClient(
-      url,
-      serviceRoleKey || anonKey,
-      serviceRoleKey
-        ? {
-            auth: { persistSession: false, autoRefreshToken: false },
-          }
-        : {
-            auth: { persistSession: false, autoRefreshToken: false },
-            global: {
-              headers: { Authorization: `Bearer ${accessToken}` },
-            },
-          }
-    );
+    const metadata = googleUser.user_metadata ?? {};
+    const firstName =
+      metadata.first_name ||
+      metadata.given_name ||
+      metadata.full_name?.split(' ')[0] ||
+      email.split('@')[0];
 
-    let profileId = googleUser.id;
-    const { data: existingProfile } = await profileClient
-      .from('profiles')
-      .select('id, email, first_name, avatar_url')
-      .eq('email', email)
-      .maybeSingle();
+    // googleUser.id EST l'id Supabase Auth (auth.users.id) : c'est le même
+    // id space/auth partout dans l'app, aucun champ password_hash à gérer.
+    const profile = await upsertProfile({
+      id: googleUser.id,
+      email,
+      firstName: String(firstName).trim(),
+      avatarUrl: metadata.avatar_url ?? null,
+    });
 
-    if (existingProfile) {
-      profileId = existingProfile.id;
-    } else {
-      const metadata = googleUser.user_metadata ?? {};
-      const firstName =
-        metadata.first_name ||
-        metadata.given_name ||
-        metadata.full_name?.split(' ')[0] ||
-        email.split('@')[0];
-
-      const { error: profileError } = await profileClient.from('profiles').insert({
-        id: profileId,
-        email,
-        first_name: String(firstName).trim(),
-        avatar_url: metadata.avatar_url ?? null,
-      });
-
-      if (profileError) {
-        console.error('Google profile sync error:', profileError);
-        return NextResponse.json(
-          {
-            message:
-              'Impossible de créer le profil Google. Vérifie les policies RLS de profiles ou configure SUPABASE_SERVICE_ROLE_KEY sur Vercel.',
-          },
-          { status: 500 }
-        );
-      }
+    if (!profile) {
+      return NextResponse.json(
+        {
+          message: 'Impossible de créer le profil Google. Vérifie la configuration Supabase.',
+        },
+        { status: 500 }
+      );
     }
 
-    const profile = existingProfile ?? {
-      id: profileId,
-      email,
-      first_name: String(googleUser.user_metadata?.full_name ?? email.split('@')[0]),
-      avatar_url: googleUser.user_metadata?.avatar_url,
-    };
-    const token = generateToken(profile.id, profile.email);
     const space = await getSpaceByUserId(profile.id);
 
     return NextResponse.json({
-      token,
+      token: accessToken,
       hasSpace: Boolean(space),
       user: {
         id: profile.id,
         email: profile.email,
-        firstName: profile.first_name,
-        avatar: profile.avatar_url,
+        firstName: profile.firstName,
+        avatar: profile.avatar,
       },
-      space,
+      space: space || null,
     });
   } catch (error) {
     console.error('Google auth error:', error);

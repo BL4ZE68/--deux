@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmail, verifyPassword, generateToken, getSpaceByUserId } from '@/lib/db';
+import { createClient } from '@supabase/supabase-js';
+import { upsertProfile, getSpaceByUserId } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,25 +14,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await getUserByEmail(email);
-    if (!user || !verifyPassword(password, user.password)) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const anonKey =
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      return NextResponse.json({ message: 'Supabase n’est pas configuré' }, { status: 503 });
+    }
+
+    const authClient = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data, error } = await authClient.auth.signInWithPassword({
+      email: String(email).trim().toLowerCase(),
+      password,
+    });
+
+    if (error || !data.session || !data.user) {
       return NextResponse.json(
         { message: 'Email ou mot de passe incorrect' },
         { status: 401 }
       );
     }
 
-    const token = generateToken(user.id, user.email);
-    const space = await getSpaceByUserId(user.id);
+    // S'assure que le profil existe (cas d'un compte ancien créé avant
+    // cette migration, ou profil jamais synchronisé pour une raison X).
+    const metadata = data.user.user_metadata ?? {};
+    const profile =
+      (await upsertProfile({
+        id: data.user.id,
+        email: data.user.email ?? email,
+        firstName: metadata.first_name || email.split('@')[0],
+      })) ?? null;
+
+    if (!profile) {
+      return NextResponse.json(
+        { message: 'Impossible de récupérer le profil.' },
+        { status: 500 }
+      );
+    }
+
+    const space = await getSpaceByUserId(profile.id);
 
     return NextResponse.json({
-      token,
-      hasSpace: !!space,
+      token: data.session.access_token,
+      hasSpace: Boolean(space),
       user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        avatar: user.avatar,
+        id: profile.id,
+        email: profile.email,
+        firstName: profile.firstName,
+        avatar: profile.avatar,
       },
       space: space || null,
     });

@@ -1,21 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  addReaction,
-  getSpaceByUserId,
-  getUserById,
-  getMemories,
-  getReactions,
-  verifyToken,
-  createNotification,
-} from '@/lib/db';
-
-async function getAuthenticatedUser(request: NextRequest) {
-  const header = request.headers.get('authorization');
-  if (!header || !header.startsWith('Bearer ')) return null;
-  const token = verifyToken(header.substring(7));
-  if (!token) return null;
-  return getUserById(token.userId);
-}
+import { getAuthenticatedUser } from '@/lib/auth';
+import { addReaction, getSpaceByUserId, getMemories, getReactions, createNotification } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser(request);
@@ -60,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   const reaction = await addReaction(memoryId, user.id, emoji);
   if (!reaction) {
-    return NextResponse.json({ message: 'Impossible d’ajouter la réaction' }, { status: 500 });
+    return NextResponse.json({ message: 'Impossible d\u2019ajouter la réaction' }, { status: 500 });
   }
   const memory = memories.find((item) => item.id === memoryId);
   if (memory && memory.author_id !== user.id) {

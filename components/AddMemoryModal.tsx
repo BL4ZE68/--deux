@@ -8,13 +8,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface AddMemoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (type: string, content: string) => void;
+  onSubmit: (type: string, content: string, file?: File) => Promise<void> | void;
 }
 
 export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProps) {
   const [step, setStep] = useState<'type' | 'content'>('type');
   const [selectedType, setSelectedType] = useState('');
   const [content, setContent] = useState('');
+  const [file, setFile] = useState<File | undefined>();
+  const [submitting, setSubmitting] = useState(false);
 
   const types = [
     { id: 'word', label: '💌 Petit mot', description: 'Écrivez quelque chose' },
@@ -26,17 +28,22 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
 
   const handleTypeSelect = (typeId: string) => {
     setSelectedType(typeId);
-    if (typeId !== 'photo' && typeId !== 'video' && typeId !== 'audio') {
-      setStep('content');
-    }
+    setStep('content');
   };
 
-  const handleSubmit = () => {
-    onSubmit(selectedType, content);
-    setStep('type');
-    setSelectedType('');
-    setContent('');
-    onClose();
+  const handleSubmit = async () => {
+    if (!content.trim() && !file) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(selectedType, content, file);
+      setStep('type');
+      setSelectedType('');
+      setContent('');
+      setFile(undefined);
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -90,13 +97,21 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {selectedType === 'word' && (
+                  {(selectedType === 'word' || selectedType === 'photo' || selectedType === 'video' || selectedType === 'audio') && (
                     <textarea
-                      autoFocus
-                      className="w-full h-40 px-4 py-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                      placeholder="Écrivez votre message..."
+                      className="w-full h-28 px-4 py-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                      placeholder={selectedType === 'word' ? 'Écrivez votre message...' : 'Ajoutez une légende (optionnel)...'}
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
+                    />
+                  )}
+
+                  {(selectedType === 'photo' || selectedType === 'video' || selectedType === 'audio') && (
+                    <input
+                      type="file"
+                      accept={selectedType === 'photo' ? 'image/*' : selectedType === 'video' ? 'video/*' : 'audio/*'}
+                      onChange={(event) => setFile(event.target.files?.[0])}
+                      className="w-full rounded-lg border-2 border-dashed border-slate-300 p-4 text-sm dark:border-slate-700"
                     />
                   )}
 
@@ -139,10 +154,10 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
                     </Button>
                     <Button
                       className="flex-1"
-                      onClick={handleSubmit}
-                      disabled={!content.trim()}
+                      onClick={() => void handleSubmit()}
+                      disabled={submitting || (!content.trim() && !file)}
                     >
-                      Partager ❤️
+                      {submitting ? 'Envoi…' : 'Partager ❤️'}
                     </Button>
                   </div>
                 </div>

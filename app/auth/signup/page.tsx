@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { Button, Input, Card } from '@/components/ui';
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 export default function SignupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
     email: '',
@@ -54,31 +54,18 @@ export default function SignupPage() {
       }
 
       const data = await response.json();
+
+      if (data.needsEmailConfirmation) {
+        setError('');
+        setInfo(data.message || 'Vérifie ta boîte mail pour confirmer ton compte.');
+        return;
+      }
+
       localStorage.setItem('auth_token', data.token);
       router.push('/auth/create-space');
     } catch (err: any) {
       setError(err.message || 'Une erreur est survenue');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleSignup = async () => {
-    setLoading(true);
-    setError('');
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setError('La connexion Google n’est pas configurée.');
-      setLoading(false);
-      return;
-    }
-
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (oauthError) {
-      setError(oauthError.message);
       setLoading(false);
     }
   };
@@ -137,20 +124,16 @@ export default function SignupPage() {
               {error}
             </div>
           )}
+          {info && (
+            <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-sm">
+              {info}
+            </div>
+          )}
 
-          <Button type="submit" size="lg" className="w-full" disabled={loading}>
+          <Button type="submit" size="lg" className="w-full" disabled={loading || Boolean(info)}>
             {loading ? 'Inscription en cours...' : 'Créer mon compte'}
           </Button>
         </form>
-
-        <div className="flex items-center gap-3 my-5">
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
-          <span className="text-xs text-slate-500">OU</span>
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
-        </div>
-        <Button type="button" variant="secondary" className="w-full" onClick={() => void handleGoogleSignup()} disabled={loading}>
-          Créer un compte avec Google
-        </Button>
 
         <p className="text-center text-sm text-slate-600 dark:text-slate-400 mt-6">
           Vous avez déjà un compte ?{' '}

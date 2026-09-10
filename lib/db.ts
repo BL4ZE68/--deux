@@ -5,7 +5,6 @@ export interface User {
   id: string;
   email: string;
   firstName: string;
-  password: string;
   avatar?: string;
   createdAt: Date;
 }
@@ -48,30 +47,22 @@ export interface AppNotification {
   createdAt: Date;
 }
 
-interface TokenData {
-  userId: string;
-  email: string;
-  expiresAt: number;
-}
-
+// NOTE: l'authentification (mots de passe, tokens de session) est
+// entièrement déléguée à Supabase Auth — voir lib/auth.ts. Ce fichier ne
+// gère plus que les données applicatives (espaces, souvenirs, réactions,
+// notifications). Les Maps ci-dessous ne servent que de repli en local
+// quand aucun client Supabase n'est configurable (pas de variables d'env).
 const db = {
-  users: new Map<string, User>(),
   spaces: new Map<string, SharedSpace>(),
   memories: new Map<string, Memory[]>(),
-  tokens: new Map<string, TokenData>(),
   invitationCodes: new Map<string, string>(),
 };
-
-function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
-}
 
 function normalizeUser(row: Record<string, any>): User {
   return {
     id: String(row.id),
     email: String(row.email ?? '').toLowerCase(),
     firstName: String(row.first_name ?? row.firstName ?? 'Utilisateur'),
-    password: String(row.password_hash ?? row.password ?? ''),
     avatar: row.avatar_url ?? row.avatar ?? undefined,
     createdAt: row.created_at ? new Date(row.created_at) : new Date(),
   };
@@ -130,134 +121,75 @@ export function getSupabaseClient(): SupabaseClient | null {
   });
 }
 
-export function verifyPassword(password: string, hash: string): boolean {
-  return hashPassword(password) === hash;
-}
-
-export function generateToken(userId: string, email: string): string {
-  const token = crypto.randomBytes(32).toString('hex');
-  db.tokens.set(token, {
-    userId,
-    email,
-    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-  });
-  return token;
-}
-
-export function verifyToken(token: string): TokenData | null {
-  const data = db.tokens.get(token);
-  if (!data || data.expiresAt < Date.now()) {
-    db.tokens.delete(token);
-    return null;
-  }
-  return data;
-}
-
-export async function getUserByEmail(email: string): Promise<User | null> {
-  const normalizedEmail = email.trim().toLowerCase();
-  const client = getSupabaseClient();
-
-  if (client) {
-    const { data, error } = await client
-      .from('profiles')
-      .select('*')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
-
-    if (!error && data) {
-      const user = normalizeUser(data);
-      db.users.set(user.email, user);
-      return user;
-    }
-  }
-
-  return db.users.get(normalizedEmail) || null;
-}
-
 export async function getUserById(id: string): Promise<User | null> {
   const client = getSupabaseClient();
+  if (!client) return null;
 
-  if (client) {
-    const { data, error } = await client.from('profiles').select('*').eq('id', id).maybeSingle();
-    if (!error && data) {
-      const user = normalizeUser(data);
-      db.users.set(user.email, user);
-      return user;
-    }
-  }
+  const { data, error } = await client
+    .from('profiles')
+    .select('id, email, first_name, avatar_url, created_at')
+    .eq('id', id)
+    .maybeSingle();
 
-  for (const user of db.users.values()) {
-    if (user.id === id) return user;
-  }
-  return null;
+  if (error || !data) return null;
+  return normalizeUser(data);
 }
 
-export async function createUser(email: string, password: string, firstName: string): Promise<User> {
-  const normalizedEmail = email.trim().toLowerCase();
-  const hashedPassword = hashPassword(password);
+/**
+ * Crée (ou met à jour) la ligne `profiles` associée à un utilisateur
+ * Supabase Auth déjà existant (id = auth.users.id). Utilisé après
+ * signUp/signInWithOAuth : Supabase Auth gère le mot de passe/OAuth,
+ * cette fonction ne s'occupe que des données de profil applicatives.
+ */
+export async function upsertProfile(params: {
+  id: string;
+  email: string;
+  firstName: string;
+  avatarUrl?: string | null;
+}): Promise<User | null> {
   const client = getSupabaseClient();
+  if (!client) return null;
 
-  if (client) {
-    const id = crypto.randomUUID();
-    const { data, error } = await client
-      .from('profiles')
-      .insert({
-        id,
-        email: normalizedEmail,
-        first_name: firstName.trim(),
-        password_hash: hashedPassword,
-        avatar_url: null,
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+  const { data, error } = await client
+    .from('profiles')
+    .upsert(
+      {
+        id: params.id,
+        email: params.email.trim().toLowerCase(),
+        first_name: params.firstName.trim(),
+        avatar_url: params.avatarUrl ?? null,
+      },
+      { onConflict: 'id', ignoreDuplicates: false }
+    )
+    .select('id, email, first_name, avatar_url, created_at')
+    .single();
 
-    if (!error && data) {
-      const user = normalizeUser(data);
-      db.users.set(user.email, user);
-      return user;
-    }
-
+  if (error || !data) {
+    console.error('upsertProfile error:', error);
+    return null;
   }
-
-  const user: User = {
-    id: crypto.randomUUID(),
-    email: normalizedEmail,
-    firstName: firstName.trim(),
-    password: hashedPassword,
-    avatar: undefined,
-    createdAt: new Date(),
-  };
-
-  db.users.set(user.email, user);
-  return user;
+  return normalizeUser(data);
 }
 
 export async function updateUserProfile(userId: string, firstName: string): Promise<User | null> {
-  const client = getSupabaseClient();
   const normalizedName = firstName.trim();
   if (!normalizedName) return null;
 
-  if (client) {
-    const { data, error } = await client
-      .from('profiles')
-      .update({ first_name: normalizedName })
-      .eq('id', userId)
-      .select()
-      .single();
+  const client = getSupabaseClient();
+  if (!client) return null;
 
-    if (!error && data) {
-      const user = normalizeUser(data);
-      db.users.set(user.email, user);
-      return user;
-    }
+  const { data, error } = await client
+    .from('profiles')
+    .update({ first_name: normalizedName })
+    .eq('id', userId)
+    .select('id, email, first_name, avatar_url, created_at')
+    .single();
+
+  if (error || !data) {
+    console.error('updateUserProfile error:', error);
+    return null;
   }
-
-  const user = await getUserById(userId);
-  if (!user) return null;
-  user.firstName = normalizedName;
-  db.users.set(user.email, user);
-  return user;
+  return normalizeUser(data);
 }
 
 export async function getSpaceByCode(code: string): Promise<SharedSpace | null> {
@@ -316,6 +248,11 @@ export function generateInvitationCode(): string {
 }
 
 export async function createSpace(userId: string): Promise<{ spaceId: string; code: string }> {
+  const existingSpace = await getSpaceByUserId(userId);
+  if (existingSpace) {
+    return { spaceId: existingSpace.id, code: existingSpace.code };
+  }
+
   const client = getSupabaseClient();
   const spaceId = crypto.randomUUID();
   const code = generateInvitationCode();
@@ -374,6 +311,7 @@ export async function joinSpace(userId: string, code: string): Promise<SharedSpa
         updated_at: new Date().toISOString(),
       })
       .eq('id', existingSpace.id)
+      .is('user2_id', null)
       .select()
       .single();
 
@@ -383,6 +321,8 @@ export async function joinSpace(userId: string, code: string): Promise<SharedSpa
       db.invitationCodes.set(space.code, space.id);
       return space;
     }
+
+    return null;
   }
 
   existingSpace.user2_id = userId;

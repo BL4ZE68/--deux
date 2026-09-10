@@ -1,23 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken, getUserById, getSpaceByUserId } from '@/lib/db';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { getSpaceByUserId } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ message: 'Token requis' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const tokenData = verifyToken(token);
-
-    if (!tokenData) {
-      return NextResponse.json({ message: 'Token invalide ou expiré' }, { status: 401 });
-    }
-
-    const user = await getUserById(tokenData.userId);
+    const user = await getAuthenticatedUser(request);
     if (!user) {
-      return NextResponse.json({ message: 'Utilisateur non trouvé' }, { status: 404 });
+      return NextResponse.json({ message: 'Token invalide ou expiré' }, { status: 401 });
     }
 
     const space = await getSpaceByUserId(user.id);

@@ -124,6 +124,8 @@ npm start        # Serveur de production
 2. Ouvre le **SQL Editor**.
 3. Exécute [`supabase/schema.sql`](./supabase/schema.sql).
 4. Active `memories`, `reactions` et `notifications` dans la publication `supabase_realtime`.
+5. Le script crée aussi le bucket privé `memories`. Les uploads photo, vidéo et audio
+   passent par `/api/memories` et nécessitent `SUPABASE_SERVICE_ROLE_KEY` côté serveur.
 5. Renseigne `.env.local` :
 
 ```env
@@ -304,7 +306,7 @@ Le workflow [`CI`](./.github/workflows/ci.yml) exécute automatiquement le build
 - [x] Réactions et notifications API
 - [x] Schéma Supabase
 - [x] Build CI GitHub Actions
-- [ ] Upload Supabase Storage
+- [x] Upload Supabase Storage privé pour photo, vidéo et audio
 - [ ] Supabase Auth et RLS métier complètes
 - [ ] Calendrier et streak
 - [ ] Messages « Ouvre quand... »

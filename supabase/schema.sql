@@ -55,6 +55,36 @@ create table if not exists secret_messages (
   created_at timestamptz default now()
 );
 
+insert into storage.buckets (id, name, public)
+values ('memories', 'memories', false)
+on conflict (id) do nothing;
+
+drop policy if exists "Members can upload memory media" on storage.objects;
+create policy "Members can upload memory media"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'memories'
+  and exists (
+    select 1 from public.spaces s
+    where s.id::text = split_part(name, '/', 1)
+      and (s.user1_id = auth.uid() or s.user2_id = auth.uid())
+  )
+);
+
+drop policy if exists "Members can view memory media" on storage.objects;
+create policy "Members can view memory media"
+on storage.objects for select
+to authenticated
+using (
+  bucket_id = 'memories'
+  and exists (
+    select 1 from public.spaces s
+    where s.id::text = split_part(name, '/', 1)
+      and (s.user1_id = auth.uid() or s.user2_id = auth.uid())
+  )
+);
+
 create index if not exists profiles_email_idx on profiles(email);
 create index if not exists spaces_code_idx on spaces(code);
 create index if not exists spaces_members_idx on spaces(user1_id, user2_id);
@@ -88,6 +118,99 @@ create policy "profiles_update_own"
   to authenticated
   using (auth.uid() = id)
   with check (auth.uid() = id);
+
+drop policy if exists "spaces_select_member" on spaces;
+create policy "spaces_select_member"
+  on spaces for select
+  to authenticated
+  using (auth.uid() = user1_id or auth.uid() = user2_id);
+
+drop policy if exists "spaces_insert_owner" on spaces;
+create policy "spaces_insert_owner"
+  on spaces for insert
+  to authenticated
+  with check (auth.uid() = user1_id and user2_id is null);
+
+drop policy if exists "spaces_join_open" on spaces;
+create policy "spaces_join_open"
+  on spaces for update
+  to authenticated
+  using (user2_id is null and auth.uid() <> user1_id)
+  with check (auth.uid() = user2_id);
+
+drop policy if exists "memories_select_member" on memories;
+create policy "memories_select_member"
+  on memories for select
+  to authenticated
+  using (
+    exists (
+      select 1 from spaces
+      where spaces.id = memories.space_id
+        and (spaces.user1_id = auth.uid() or spaces.user2_id = auth.uid())
+    )
+  );
+
+drop policy if exists "memories_insert_member" on memories;
+create policy "memories_insert_member"
+  on memories for insert
+  to authenticated
+  with check (
+    author_id = auth.uid()
+    and exists (
+      select 1 from spaces
+      where spaces.id = memories.space_id
+        and (spaces.user1_id = auth.uid() or spaces.user2_id = auth.uid())
+    )
+  );
+
+drop policy if exists "reactions_member" on reactions;
+create policy "reactions_member"
+  on reactions for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from memories
+      join spaces on spaces.id = memories.space_id
+      where memories.id = reactions.memory_id
+        and (spaces.user1_id = auth.uid() or spaces.user2_id = auth.uid())
+    )
+  )
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1
+      from memories
+      join spaces on spaces.id = memories.space_id
+      where memories.id = reactions.memory_id
+        and (spaces.user1_id = auth.uid() or spaces.user2_id = auth.uid())
+    )
+  );
+
+drop policy if exists "notifications_own" on notifications;
+create policy "notifications_own"
+  on notifications for select
+  to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists "secrets_member" on secret_messages;
+create policy "secrets_member"
+  on secret_messages for all
+  to authenticated
+  using (
+    exists (
+      select 1 from spaces
+      where spaces.id = secret_messages.space_id
+        and (spaces.user1_id = auth.uid() or spaces.user2_id = auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1 from spaces
+      where spaces.id = secret_messages.space_id
+        and (spaces.user1_id = auth.uid() or spaces.user2_id = auth.uid())
+    )
+  );
 
 -- Enable memories, reactions and notifications in Supabase Dashboard:
 -- Database > Publications > supabase_realtime.
