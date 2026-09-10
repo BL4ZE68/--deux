@@ -217,6 +217,7 @@ export async function createUser(email: string, password: string, firstName: str
       db.users.set(user.email, user);
       return user;
     }
+
   }
 
   const user: User = {
@@ -228,6 +229,33 @@ export async function createUser(email: string, password: string, firstName: str
     createdAt: new Date(),
   };
 
+  db.users.set(user.email, user);
+  return user;
+}
+
+export async function updateUserProfile(userId: string, firstName: string): Promise<User | null> {
+  const client = getSupabaseClient();
+  const normalizedName = firstName.trim();
+  if (!normalizedName) return null;
+
+  if (client) {
+    const { data, error } = await client
+      .from('profiles')
+      .update({ first_name: normalizedName })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (!error && data) {
+      const user = normalizeUser(data);
+      db.users.set(user.email, user);
+      return user;
+    }
+  }
+
+  const user = await getUserById(userId);
+  if (!user) return null;
+  user.firstName = normalizedName;
   db.users.set(user.email, user);
   return user;
 }

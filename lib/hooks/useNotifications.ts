@@ -39,7 +39,7 @@ export function useNotifications() {
         id: Math.random().toString(36).substring(7),
         space_id: 'temp',
         user_id: 'temp',
-        type: type as any,
+        type: type as Notification['type'],
         message,
         relatedMemoryId,
         read: false,
@@ -47,17 +47,10 @@ export function useNotifications() {
       };
 
       addNotification(notification);
-
-      // Auto-remove after 5 seconds
-      setTimeout(() => {
-        removeNotification(notification.id);
-      }, 5000);
+      window.setTimeout(() => removeNotification(notification.id), 5000);
     },
     [addNotification, removeNotification]
   );
 
-  return {
-    notifications,
-    showNotification,
-  };
+  return { notifications, showNotification };
 }

@@ -18,6 +18,8 @@ export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
   });
@@ -78,6 +80,32 @@ export default function ProfilePage() {
     router.push('/');
   };
 
+  const handleSave = async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    setSaving(true);
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Impossible de sauvegarder le profil');
+      setUser(data.user);
+      setMessage('Profil mis à jour.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Une erreur est survenue');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
@@ -126,7 +154,12 @@ export default function ProfilePage() {
                 value={formData.firstName}
                 onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
               />
-              <Button className="w-full md:w-auto">Enregistrer les modifications</Button>
+              <Button className="w-full md:w-auto" onClick={() => void handleSave()} disabled={saving}>
+                {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
+              </Button>
+              {message && (
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-3">{message}</p>
+              )}
             </div>
           </div>
 
