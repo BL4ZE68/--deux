@@ -63,7 +63,6 @@ export async function POST(request: NextRequest) {
         id: profileId,
         email,
         first_name: String(firstName).trim(),
-        password_hash: `google:${googleUser.id}`,
         avatar_url: metadata.avatar_url ?? null,
       });
 
