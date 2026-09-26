@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, Button, Input } from '@/components/ui';
-import { Lock, Plus, Calendar } from 'lucide-react';
+import { Lock, Plus, Calendar, Heart } from 'lucide-react';
 import Link from 'next/link';
 
 interface SecretMessage {

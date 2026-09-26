@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card } from '@/components/ui';
-import { Heart, MessageCircle, Images, Settings, LogOut, Menu, X } from 'lucide-react';
+import { Heart, MessageCircle, Images, Settings, LogOut, Menu, X, Lock } from 'lucide-react';
 import Link from 'next/link';
 
 interface User {

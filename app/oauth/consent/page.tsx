@@ -43,7 +43,8 @@ function ConsentContent() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) {
-        router.push(`/auth/login?redirect=/oauth/consent?authorization_id=${encodeURIComponent(authorizationId)}`);
+        const returnTo = `/oauth/consent?${new URLSearchParams({ authorization_id: authorizationId })}`;
+        router.push(`/auth/login?${new URLSearchParams({ redirect: returnTo })}`);
         return;
       }
 

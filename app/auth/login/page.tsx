@@ -6,6 +6,7 @@ import { Button, Input, Card } from '@/components/ui';
 import Link from 'next/link';
 import { Heart, KeyRound, Mail, ShieldCheck, Sparkles } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { getAuthCallbackUrl, getSafeRedirectPath } from '@/lib/safe-redirect';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,6 +46,10 @@ export default function LoginPage() {
         return;
       }
 
+      const redirectPath = getSafeRedirectPath(
+        new URLSearchParams(window.location.search).get('redirect'),
+        window.location.origin
+      );
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,8 +62,18 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
+      if (redirectPath?.startsWith('/oauth/consent')) {
+        const supabase = createSupabaseBrowserClient();
+        if (!supabase) throw new Error('La connexion OAuth n’est pas configurée.');
+        const { error: sessionError } = await supabase.auth.signInWithPassword({
+          email: formData.email.trim(),
+          password: formData.password,
+        });
+        if (sessionError) throw sessionError;
+      }
+
       localStorage.setItem('auth_token', data.token);
-      router.push(data.hasSpace ? '/dashboard' : '/auth/create-space');
+      router.push(redirectPath || (data.hasSpace ? '/dashboard' : '/auth/create-space'));
     } catch (err: any) {
       setError(err.message || 'Une erreur est survenue');
     } finally {
@@ -76,9 +91,10 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
+    const redirect = new URLSearchParams(window.location.search).get('redirect');
     const { error: magicError } = await supabase.auth.signInWithOtp({
       email: formData.email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: getAuthCallbackUrl(redirect, window.location.origin) },
     });
     if (magicError) setError(magicError.message);
     else setInfo('Un lien de connexion vient d’être envoyé à ton adresse email.');
@@ -95,10 +111,11 @@ export default function LoginPage() {
       return;
     }
 
+    const redirect = new URLSearchParams(window.location.search).get('redirect');
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: getAuthCallbackUrl(redirect, window.location.origin),
       },
     });
     if (oauthError) {

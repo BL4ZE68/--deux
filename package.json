@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm --prefix mobile run start",
+    "api:dev": "next dev --hostname 0.0.0.0",
+    "web:dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "mobile:android": "npm --prefix mobile run android",
+    "mobile:ios": "npm --prefix mobile run ios"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

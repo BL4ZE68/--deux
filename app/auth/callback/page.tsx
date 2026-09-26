@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { getSafeRedirectPath } from '@/lib/safe-redirect';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -11,6 +12,10 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const completeGoogleLogin = async () => {
+      const redirectPath = getSafeRedirectPath(
+        new URLSearchParams(window.location.search).get('redirect'),
+        window.location.origin
+      );
       const supabase = createSupabaseBrowserClient();
       if (!supabase) {
         setError('Supabase n’est pas configuré.');
@@ -44,7 +49,7 @@ export default function AuthCallbackPage() {
       }
 
       localStorage.setItem('auth_token', result.token);
-      router.replace(result.hasSpace ? '/dashboard' : '/auth/create-space');
+      router.replace(redirectPath || (result.hasSpace ? '/dashboard' : '/auth/create-space'));
     };
 
     void completeGoogleLogin();
